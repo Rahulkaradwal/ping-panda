@@ -25,12 +25,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={cn(inter.variable, eb_garamond.variable)}>
-      <ClerkProvider>
+    <ClerkProvider>
+      <html lang="en" className={cn(inter.variable, eb_garamond.variable)}>
         <body className="font-sans bg-brand-50 text-brand-950 antialiased">
           <Providers>{children}</Providers>
         </body>
-      </ClerkProvider>
-    </html>
+      </html>
+    </ClerkProvider>
   )
 }

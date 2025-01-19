@@ -2,6 +2,7 @@ import { cn } from "@/utils"
 import { Dispatch, ReactNode, SetStateAction } from "react"
 import { Drawer } from "vaul"
 import { Dialog, DialogContent, DialogTitle } from "./dialog"
+import { useMediaQuery } from "@/hooks/use-media-query"
 
 interface ModalProps {
   children?: ReactNode
@@ -34,9 +35,7 @@ export const Modal = ({
     }
   }
 
-  const isMobile = true
-
-  //   const { isMobile } = useMediaQuery()
+  const { isMobile } = useMediaQuery()
 
   if (isMobile && !desktopOnly) {
     return (

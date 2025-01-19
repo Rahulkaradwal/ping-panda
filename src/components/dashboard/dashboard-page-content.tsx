@@ -9,6 +9,7 @@ import { ArrowRight, BarChart2, Clock, Database, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import { Modal } from "../ui/modal"
+import { DashboardEmptyState } from "./dashboard-empty-state"
 
 export const DashboardPageContent = () => {
   const queryClient = useQueryClient()
@@ -42,7 +43,7 @@ export const DashboardPageContent = () => {
   }
 
   if (!categories || categories.length === 0) {
-    return <div>No categories</div>
+    return <DashboardEmptyState />
   }
 
   return (

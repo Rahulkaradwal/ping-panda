@@ -1,24 +1,29 @@
 import { Button } from "@/components/ui/button"
 import { client } from "@/lib/client"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { Card } from "../ui/card"
+import CreateEventCategoryModal from "../create-event-category-modal"
+import Image from "next/image"
 
 export const DashboardEmptyState = () => {
   const queryClient = useQueryClient()
 
-  //   const { mutate: insertQuickstartCategories, isPending } = useMutation({
-  //     mutationFn: async () => {
-  //       await client.category.insertQuickstartCategories.$post()
-  //     },
-  //     onSuccess: () => {
-  //       queryClient.invalidateQueries({ queryKey: ["user-event-categories"] })
-  //     },
-  //   })
+  const { mutate: insertQuickstartCategories, isPending } = useMutation({
+    mutationFn: async () => {
+      await client.category.insertQuickstartCategories.$post()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-event-categories"] })
+    },
+  })
 
   return (
     <Card className="flex flex-col items-center justify-center rounded-2xl flex-1 text-center p-6">
       <div className="flex justify-center w-full">
-        <img
+        <Image
           src="/brand-asset-wave.png"
+          width={200}
+          height={200}
           alt="No categories"
           className="size-48 -mt-24"
         />

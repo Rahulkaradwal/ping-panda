@@ -1,97 +1,230 @@
 import { FREE_QUOTA, PRO_QUOTA } from "@/config"
 import { db } from "@/db"
 import { DiscordClient } from "@/lib/discord-client"
-import {
-  CATEGORY_COLOR_VALIDATOR,
-  CATEGORY_NAME_VALIDATOR,
-} from "@/lib/validators/category-validator"
-import { NextRequest, NextResponse } from "next/server"
+import { parseColor } from "@/lib/utils"
+import { CATEGORY_NAME_VALIDATOR } from "@/lib/validators/category-validator"
+import { router } from "@/server/__internals/router"
+import { privateProcedure } from "@/server/procedures"
+import { startOfDay, startOfMonth, startOfWeek } from "date-fns"
+import { HTTPException } from "hono/http-exception"
 import { z } from "zod"
 
 const REQUEST_VALIDATOR = z.object({
   category: CATEGORY_NAME_VALIDATOR,
 })
+export const categoryRouter = router({
+  getEventCategories: privateProcedure.query(async ({ c, ctx }) => {
+    const now = new Date()
+    const firstDayOfMonth = startOfMonth(now)
 
-export const POST = async (req: NextRequest) => {
-  try {
-    const authHeader = req.headers.get("Authorization")
-
-    if (!authHeader) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-    }
-
-    if (!authHeader.startsWith("Bearer ")) {
-      return NextResponse.json(
-        {
-          message: "Invalid auth header format. Expected: 'Bearer [API_KEY]'",
+    const categories = await db.eventCategory.findMany({
+      where: { userId: ctx.user.id },
+      select: {
+        id: true,
+        name: true,
+        emoji: true,
+        color: true,
+        updatedAt: true,
+        createdAt: true,
+        events: {
+          where: { createdAt: { gte: firstDayOfMonth } },
+          select: {
+            fields: true,
+            createdAt: true,
+          },
         },
-        { status: 401 }
-      )
-    }
-
-    const apiKey = authHeader.split(" ")[1]
-
-    if (!apiKey || apiKey.trim() === "") {
-      return NextResponse.json({ message: "Invalid API key" }, { status: 401 })
-    }
-
-    const user = await db.user.findUnique({
-      where: { apiKey },
-      include: { EventCategories: true },
-    })
-
-    if (!user) {
-      return NextResponse.json({ message: "Invalid API key" }, { status: 401 })
-    }
-
-    if (!user.discordId) {
-      return NextResponse.json(
-        {
-          message: "Please enter your discord ID in your account settings",
+        _count: {
+          select: {
+            events: {
+              where: { createdAt: { gte: firstDayOfMonth } },
+            },
+          },
         },
-        { status: 403 }
-      )
-    }
-
-    // ACTUAL LOGIC
-    const currentData = new Date()
-    const currentMonth = currentData.getMonth() + 1
-    const currentYear = currentData.getFullYear()
-
-    const quota = await db.quota.findUnique({
-      where: {
-        userId: user.id,
-        month: currentMonth,
-        year: currentYear,
       },
+      orderBy: { updatedAt: "desc" },
     })
 
-    const quotaLimit =
-      user.plan === "FREE"
-        ? FREE_QUOTA.maxEventsPerMonth
-        : PRO_QUOTA.maxEventsPerMonth
+    const categoriesWithCounts = categories.map((category) => {
+      const uniqueFieldNames = new Set<string>()
+      let lastPing: Date | null = null
 
-    if (quota && quota.count >= quotaLimit) {
-      return NextResponse.json(
-        {
-          message:
-            "Monthly quota reached. Please upgrade your plan for more events",
-        },
-        { status: 429 }
-      )
-    }
-    const discord = new DiscordClient(process.env.DISCORD_BOT_TOKEN)
-    const dmchannel = await discord.createDB(user.discordId)
-  } catch (err) {
-    console.error(err)
+      category.events.forEach((event) => {
+        Object.keys(event.fields as object).forEach((fieldName) => {
+          uniqueFieldNames.add(fieldName)
+        })
+        if (!lastPing || event.createdAt > lastPing) {
+          lastPing = event.createdAt
+        }
+      })
 
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ message: err.message }, { status: 422 })
-    }
+      return {
+        id: category.id,
+        name: category.name,
+        emoji: category.emoji,
+        color: category.color,
+        updatedAt: category.updatedAt,
+        createdAt: category.createdAt,
+        uniqueFieldCount: uniqueFieldNames.size,
+        eventsCount: category._count.events,
+        lastPing,
+      }
+    })
 
-    return NextResponse.json(
-      { message: "Internal server error" },
-      { status: 500 }
+    return c.superjson({ categories: categoriesWithCounts })
+  }),
+
+  deleteCategory: privateProcedure
+    .input(z.object({ name: z.string() }))
+    .mutation(async ({ c, input, ctx }) => {
+      const { name } = input
+
+      await db.eventCategory.delete({
+        where: { name_userId: { name, userId: ctx.user.id } },
+      })
+
+      return c.json({ success: true })
+    }),
+
+  createEventCategory: privateProcedure
+    .input(
+      z.object({
+        name: CATEGORY_NAME_VALIDATOR,
+        color: z
+          .string()
+          .min(1, "Color is required")
+          .regex(/^#[0-9A-F]{6}$/i, "Invalid color format."),
+        emoji: z.string().emoji("Invalid emoji").optional(),
+      })
     )
-  }
-}
+    .mutation(async ({ c, ctx, input }) => {
+      const { user } = ctx
+      const { color, name, emoji } = input
+
+      // TODO: ADD PAID PLAN LOGIC
+
+      const eventCategory = await db.eventCategory.create({
+        data: {
+          name: name.toLowerCase(),
+          color: parseColor(color),
+          emoji,
+          userId: user.id,
+        },
+      })
+
+      return c.json({ eventCategory })
+    }),
+
+  insertQuickstartCategories: privateProcedure.mutation(async ({ ctx, c }) => {
+    const categories = await db.eventCategory.createMany({
+      data: [
+        { name: "bug", emoji: "🐛", color: 0xff6b6b },
+        { name: "sale", emoji: "💰", color: 0xffeb3b },
+        { name: "question", emoji: "🤔", color: 0x6c5ce7 },
+      ].map((category) => ({
+        ...category,
+        userId: ctx.user.id,
+      })),
+    })
+
+    return c.json({ success: true, count: categories.count })
+  }),
+
+  pollCategory: privateProcedure
+    .input(z.object({ name: CATEGORY_NAME_VALIDATOR }))
+    .query(async ({ c, ctx, input }) => {
+      const { name } = input
+
+      const category = await db.eventCategory.findUnique({
+        where: { name_userId: { name, userId: ctx.user.id } },
+        include: {
+          _count: {
+            select: {
+              events: true,
+            },
+          },
+        },
+      })
+
+      if (!category) {
+        throw new HTTPException(404, {
+          message: `Category "${name}" not found`,
+        })
+      }
+
+      const hasEvents = category._count.events > 0
+
+      return c.json({ hasEvents })
+    }),
+
+  getEventsByCategoryName: privateProcedure
+    .input(
+      z.object({
+        name: CATEGORY_NAME_VALIDATOR,
+        page: z.number(),
+        limit: z.number().max(50),
+        timeRange: z.enum(["today", "week", "month"]),
+      })
+    )
+    .query(async ({ c, ctx, input }) => {
+      const { name, page, limit, timeRange } = input
+
+      const now = new Date()
+      let startDate: Date
+
+      switch (timeRange) {
+        case "today":
+          startDate = startOfDay(now)
+          break
+        case "week":
+          startDate = startOfWeek(now, { weekStartsOn: 0 })
+          break
+        case "month":
+          startDate = startOfMonth(now)
+          break
+      }
+
+      const [events, eventsCount, uniqueFieldCount] = await Promise.all([
+        db.event.findMany({
+          where: {
+            EventCategory: { name, userId: ctx.user.id },
+            createdAt: { gte: startDate },
+          },
+          skip: (page - 1) * limit,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+        }),
+        db.event.count({
+          where: {
+            EventCategory: { name, userId: ctx.user.id },
+            createdAt: { gte: startDate },
+          },
+        }),
+        db.event
+          .findMany({
+            where: {
+              EventCategory: { name, userId: ctx.user.id },
+              createdAt: { gte: startDate },
+            },
+            select: {
+              fields: true,
+            },
+            distinct: ["fields"],
+          })
+          .then((events) => {
+            const fieldNames = new Set<string>()
+            events.forEach((event) => {
+              Object.keys(event.fields as object).forEach((fieldName) => {
+                fieldNames.add(fieldName)
+              })
+            })
+            return fieldNames.size
+          }),
+      ])
+
+      return c.superjson({
+        events,
+        eventsCount,
+        uniqueFieldCount,
+      })
+    }),
+})

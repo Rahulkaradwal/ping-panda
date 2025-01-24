@@ -10,29 +10,23 @@ export class DiscordClient {
   private rest: REST
 
   constructor(token: string | undefined) {
-    this.rest = new REST({
-      version: "10",
-    }).setToken(token ?? "")
+    this.rest = new REST({ version: "10" }).setToken(token ?? "")
   }
 
-  async createDB(
+  async createDM(
     userId: string
   ): Promise<RESTPostAPICurrentUserCreateDMChannelResult> {
     return this.rest.post(Routes.userChannels(), {
-      body: {
-        recipient_id: userId,
-      },
+      body: { recipient_id: userId },
     }) as Promise<RESTPostAPICurrentUserCreateDMChannelResult>
   }
 
-  async sendMessage(
+  async sendEmbed(
     channelId: string,
     embed: APIEmbed
   ): Promise<RESTPostAPIChannelMessageResult> {
     return this.rest.post(Routes.channelMessages(channelId), {
-      body: {
-        embeds: [embed],
-      },
+      body: { embeds: [embed] },
     }) as Promise<RESTPostAPIChannelMessageResult>
   }
 }

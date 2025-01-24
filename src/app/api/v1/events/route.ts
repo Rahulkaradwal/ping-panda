@@ -108,7 +108,7 @@ export const POST = async (req: NextRequest) => {
     if (!category) {
       return NextResponse.json(
         {
-          message: `You dont have a category named "${validationResult.category}"`,
+          message: `You don't have a category named "${validationResult.category}"`,
         },
         { status: 404 }
       )

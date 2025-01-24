@@ -1,4 +1,4 @@
-import { DashboardPage } from "@/components/dashboard/dashoard-page"
+import { DashboardPage } from "@/components/dashboard/dashboard-page"
 import { db } from "@/db"
 import { currentUser } from "@clerk/nextjs/server"
 import { notFound } from "next/navigation"

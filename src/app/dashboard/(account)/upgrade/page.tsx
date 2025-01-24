@@ -2,7 +2,7 @@ import { db } from "@/db"
 import { currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { UpgradePageContent } from "./upgrade-page-content"
-import { DashboardPage } from "@/components/dashboard/dashoard-page"
+import { DashboardPage } from "@/components/dashboard/dashboard-page"
 
 const Page = async () => {
   const auth = await currentUser()

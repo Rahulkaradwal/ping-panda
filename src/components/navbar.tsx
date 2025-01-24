@@ -37,7 +37,7 @@ export const Navbar = async () => {
               </>
             ) : (
               <>
-                <Link
+                {/* <Link
                   href="/pricing"
                   className={buttonVariants({
                     size: "sm",
@@ -45,7 +45,7 @@ export const Navbar = async () => {
                   })}
                 >
                   Pricing
-                </Link>
+                </Link> */}
                 <Link
                   href="/sign-in"
                   className={buttonVariants({
